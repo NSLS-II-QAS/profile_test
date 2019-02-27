@@ -17,5 +17,6 @@ class SimDetectorWithTiff(SingleTrigger, SimDetector):
 
 
 sim_det = SimDetectorWithTiff('13SIM1:', name='sim_det')
+sim_det.cam.num_images.put(1)  # there are 100 by default
 sim_det.read_attrs = ['tiff']
 sim_det.tiff.kind = 'normal'
