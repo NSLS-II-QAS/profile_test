@@ -1,0 +1,7 @@
+db/
+history.sqlite
+log/
+pid/
+security/
+static/
+static/
