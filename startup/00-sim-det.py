@@ -13,7 +13,7 @@ class SimTIFFPlugin(TIFFPlugin, FileStoreTIFFIterativeWrite):
 
 
 class SimDetectorWithTiff(SingleTrigger, SimDetector):
-    tiff = Cpt(SimTIFFPlugin, 'TIFF1:', write_path_template='tmp')
+    tiff = Cpt(SimTIFFPlugin, 'TIFF1:', write_path_template='/tmp')
 
 
 sim_det = SimDetectorWithTiff('13SIM1:', name='sim_det')
