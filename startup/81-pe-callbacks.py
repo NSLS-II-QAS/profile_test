@@ -142,5 +142,5 @@ def dark_frame_aware_plan(cam, dark_cache, obsolete_secs=60, md=None):
         yield from bpp.trigger_and_read([cam], name='primary')
 
     return (yield from inner_dark_frame_aware_plan())
-    
+
 # RE(dark_frame_aware_plan(cam, dc))
