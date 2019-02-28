@@ -128,16 +128,19 @@ dc = DarkFrameCache(name='dc')
 teleport(sim_det, dc)  # noqa
 
 
-@bpp.stage_decorator([sim_det])  # noqa
-@bpp.run_decorator(md={})
-def my_dark_frame_aware_plan(cam, dark_cache, obsolete_secs=60):
-    if (dark_cache.just_started or  # first run after instantiation
-        (dark_cache.last_collected is not None and
-         time.monotonic() - dark_cache.last_collected > obsolete_secs)):
-        yield from dark_plan(cam, dark_cache)
+def dark_frame_aware_plan(cam, dark_cache, obsolete_secs=60, md=None):
+    @bpp.stage_decorator([cam])
+    @bpp.run_decorator(md=md)
+    def inner_dark_frame_aware_plan():
+        if (dark_cache.just_started or  # first run after instantiation
+            (dark_cache.last_collected is not None and
+             time.monotonic() - dark_cache.last_collected > obsolete_secs)):
+            yield from dark_plan(cam, dark_cache)
 
-    yield from bpp.trigger_and_read([dark_cache], name='dark')
+        yield from bpp.trigger_and_read([dark_cache], name='dark')
 
-    yield from bpp.trigger_and_read([cam], name='primary')
+        yield from bpp.trigger_and_read([cam], name='primary')
 
-# RE(my_dark_frame_aware_plan(cam, dc))
+    return (yield from inner_dark_frame_aware_plan())
+    
+# RE(dark_frame_aware_plan(cam, dc))
