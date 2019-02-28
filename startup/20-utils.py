@@ -4,6 +4,7 @@ from databroker.assets.handlers import AreaDetectorTiffHandler
 
 plt.ion()
 
+
 def get_images_from_det(det):
     det.stage()
     det.trigger()

@@ -1,7 +1,7 @@
 from event_model import DocumentRouter
-from ophyd.ophydobj import OphydObject
+from ophyd import Device
+import bluesky.plans as bp  # noqa
 import bluesky.plan_stubs as bps
-import bluesky.plans as bp
 import bluesky.preprocessors as bpp
 import copy
 import time
@@ -74,20 +74,12 @@ class DarkSubtractionCallback(DocumentRouter):
             return doc
 
 
-# Background subtraction callback
-# TODO: this needs to be a wrapped RunRouter, figure out later
-# bgsub_callback = DarkSubtractionCallback(image_key="pe1_image",
-                                         # primary_stream="primary",
-                                         # dark_stream="dark")
-
-# TODO: need to attach a callback registry to the run router above
-# RE.subscribe(bgsub_callback)
-
-
 # From Tom on 02/21/2019:
-class DarkFrameCache(OphydObject):
+class DarkFrameCache(Device):
     def __init__(self, *args, **kwargs):
+        # self.det = det
         self.last_collected = None
+        self.just_started = True
         return super().__init__(*args, **kwargs)
 
     def read(self):
@@ -95,6 +87,12 @@ class DarkFrameCache(OphydObject):
 
     def describe(self):
         return self._describe
+
+    def describe_configuration(self):
+        return self._describe_configuration
+
+    # def describe_configuration(self):
+    #     return self.det.describe_configuration
 
     def collect_asset_docs(self):
         # keep track of when we get restaged to restore these
@@ -111,39 +109,35 @@ def dark_plan(cam, dark_frame_cache):
     yield from bps.trigger(cam, group='cam')
     yield from bps.wait('cam')
 
-    last_collected = teleport(cam, dark_frame_cache)
+    teleport(cam, dark_frame_cache)
+    dark_frame_cache.just_started = False
     # yield Msg('clone_for_dark_frames', cam, target)
-
 
 
 def teleport(cam, dfc):
     dfc._describe = cam.describe()
+    dfc._describe_configuration = cam.describe_configuration()
     dfc._config = cam.read_configuration()
     dfc._read = cam.read()
     dfc._asset_docs_cache = list(cam.collect_asset_docs())
     dfc.last_collected = time.monotonic()
 
-    return dfc.last_collected
-
-
-# @bpp.stage_decorator
-# @bpp.run_decorator
-def my_dark_frame_aware_plan(cam, dark_cache, obsolete_secs=60):
-    if (dark_cache.last_collected is not None and 
-        time.monotonic() > dark_cache.last_collected + obsolete_secs):
-        yield from dark_plan(cam, dark_cache)
-
-    yield from bpp.trigger_and_read([dark_cache],
-                                    name='dark')
-
-    yield from bpp.trigger_and_read([cam], name='primary')
-
-
-def master_plan():
-    for j in range(5):
-        yield from my_dark_frame_aware_plan()
-
 
 dc = DarkFrameCache(name='dc')
+# Update the '_<name>' attributes which do not exist yet
+teleport(sim_det, dc)  # noqa
+
+
+@bpp.stage_decorator([sim_det])  # noqa
+@bpp.run_decorator(md={})
+def my_dark_frame_aware_plan(cam, dark_cache, obsolete_secs=60):
+    if (dark_cache.just_started or  # first run after instantiation
+        (dark_cache.last_collected is not None and
+         time.monotonic() - dark_cache.last_collected > obsolete_secs)):
+        yield from dark_plan(cam, dark_cache)
+
+    yield from bpp.trigger_and_read([dark_cache], name='dark')
+
+    yield from bpp.trigger_and_read([cam], name='primary')
 
 # RE(my_dark_frame_aware_plan(cam, dc))
