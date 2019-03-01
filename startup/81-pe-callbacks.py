@@ -104,14 +104,16 @@ class DarkFrameCache(Device):
         self._asset_docs_cache = self._really_cached
 
 
-def dark_plan(cam, dark_frame_cache):
-    # yield from close_shutter()
-    yield from bps.trigger(cam, group='cam')
-    yield from bps.wait('cam')
+def dark_plan(cam, dark_cache, obsolete_secs):
+    if (dark_cache.just_started or  # first run after instantiation
+        (dark_cache.last_collected is not None and
+         time.monotonic() - dark_cache.last_collected > obsolete_secs)):
+        # yield from close_shutter()
+        yield from bps.trigger(cam, group='cam')
+        yield from bps.wait('cam')
 
-    teleport(cam, dark_frame_cache)
-    dark_frame_cache.just_started = False
-    # yield Msg('clone_for_dark_frames', cam, target)
+        teleport(cam, dark_cache)
+        dark_cache.just_started = False
 
 
 def teleport(cam, dfc):
@@ -128,16 +130,14 @@ dc = DarkFrameCache(name='dc')
 teleport(sim_det, dc)  # noqa
 
 
-@bpp.stage_decorator([sim_det])  # noqa
-@bpp.run_decorator(md={})
-def my_dark_frame_aware_plan(cam, dark_cache, obsolete_secs=60):
-    if (dark_cache.just_started or  # first run after instantiation
-        (dark_cache.last_collected is not None and
-         time.monotonic() - dark_cache.last_collected > obsolete_secs)):
-        yield from dark_plan(cam, dark_cache)
+def dark_frame_aware_plan(cam, dark_cache, obsolete_secs=60, md=None):
+    @bpp.stage_decorator([cam])
+    @bpp.run_decorator(md=md)
+    def inner_dark_frame_aware_plan():
+        yield from dark_plan(cam, dark_cache, obsolete_secs)
+        yield from bpp.trigger_and_read([dark_cache], name='dark')
+        yield from bpp.trigger_and_read([cam], name='primary')
 
-    yield from bpp.trigger_and_read([dark_cache], name='dark')
+    return (yield from inner_dark_frame_aware_plan())
 
-    yield from bpp.trigger_and_read([cam], name='primary')
-
-# RE(my_dark_frame_aware_plan(cam, dc))
+# RE(dark_frame_aware_plan(cam, dc))
